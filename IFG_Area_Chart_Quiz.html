@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IFG Area Chart Quiz – Page 9</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #111;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    font-family: 'Courier New', monospace;
+    min-height: 100vh;
+  }
+
+  #toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+  }
+
+  #score-display {
+    color: #ccc;
+    font-size: 0.85rem;
+    letter-spacing: 1px;
+    padding: 6px 14px;
+    background: #222;
+    border-radius: 6px;
+    border: 1px solid #444;
+  }
+
+  #score-display span { font-weight: bold; }
+  .sc { color: #4ade80; }
+  .sw { color: #f87171; }
+  .sr { color: #facc15; }
+
+  button {
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    letter-spacing: 1px;
+    padding: 6px 16px;
+    border-radius: 5px;
+    border: 1px solid #555;
+    cursor: pointer;
+    background: #2a2a2a;
+    color: #ccc;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+  button:hover { background: #3a3a3a; border-color: #888; color: #fff; }
+  #btn-reveal { border-color: #f59e0b; color: #f59e0b; }
+  #btn-reveal:hover { background: #2a2000; }
+  #btn-reset { border-color: #f87171; color: #f87171; }
+  #btn-reset:hover { background: #2a0000; }
+  #btn-check { border-color: #4ade80; color: #4ade80; }
+  #btn-check:hover { background: #002a10; }
+
+  #chart-container {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    /* chart renders at natural size up to 850px wide */
+    width: min(850px, 100%);
+  }
+
+  #chart-img {
+    display: block;
+    width: 100%;
+    height: auto;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  .field-wrap {
+    position: absolute;
+    transform: translate(-50%, -50%);
+  }
+
+  .field-wrap input {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 1.5px solid rgba(255,255,255,0.7);
+    border-radius: 2px;
+    background: rgba(255,255,255,0.88);
+    color: #000;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    font-size: clamp(7px, 1.1vw, 13px);
+    text-align: center;
+    padding: 0 2px;
+    outline: none;
+    transition: background 0.2s, border-color 0.2s;
+    caret-color: #333;
+  }
+
+  .field-wrap input:focus {
+    border-color: #2563eb;
+    background: rgba(219,234,254,0.95);
+    z-index: 10;
+  }
+
+  .field-wrap.correct input {
+    background: rgba(187,247,208,0.95);
+    border-color: #16a34a;
+    color: #166534;
+  }
+
+  .field-wrap.wrong input {
+    background: rgba(254,202,202,0.95);
+    border-color: #dc2626;
+    color: #7f1d1d;
+  }
+
+  .field-wrap.revealed input {
+    background: rgba(254,243,199,0.95);
+    border-color: #d97706;
+    color: #78350f;
+    font-style: italic;
+  }
+
+  #hint-box {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 8px 20px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+    border: 1px solid #334155;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+    white-space: nowrap;
+    z-index: 100;
+  }
+  #hint-box.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <div id="score-display">
+    CORRECT: <span class="sc" id="sc">0</span> &nbsp;|&nbsp;
+    WRONG: <span class="sw" id="sw">0</span> &nbsp;|&nbsp;
+    LEFT: <span class="sr" id="sl">0</span>
+  </div>
+  <button id="btn-check" onclick="checkAll()">Check All</button>
+  <button id="btn-reveal" onclick="revealAll()">Reveal Answers</button>
+  <button id="btn-reset" onclick="resetAll()">Reset</button>
+</div>
+
+<div id="chart-container">
+  <img id="chart-img" src="area_chart_blank.png" alt="IFG Area Chart">
+</div>
+
+<div id="hint-box" id="hint-box"></div>
+
+<script>
+// All input fields: [left%, top%, width%, height%, answer, tooltip]
+const FIELDS = [
+  // === CTAF / KAPA frequency (top, next to "KAPA Flight Schools") ===
+  { l:36.9, t:11.95, w:5.4, h:1.4, a:'122.75', tip:'CTAF / KAPA Flight Schools freq' },
+
+  // === BRK radials (left column, top area, vertical label) ===
+  { l:9.5, t:16.0, w:3.5, h:7.0, a:'BRK 360', tip:'BRK radial – NW boundary' },
+
+  // === AREA NOTES boxes (top-right) ===
+  { l:79.4, t:13.5, w:5.4, h:1.4, a:'1', tip:'Area Notes: Area #' },
+  { l:79.4, t:15.1, w:5.4, h:1.4, a:"9,000'", tip:'Area 1: Complete all stalls by ___' },
+  { l:80.1, t:16.8, w:5.4, h:1.4, a:'3', tip:'Area Notes: Area #' },
+  { l:80.1, t:19.7, w:5.4, h:1.4, a:"9,000'", tip:'Area 3: Complete all stalls by ___' },
+  { l:80.1, t:22.1, w:5.4, h:1.4, a:"8,500'", tip:'Area 5: Do not descend below ___' },
+  { l:80.1, t:25.0, w:5.4, h:1.4, a:"8,500'", tip:'Area 6: Do not descend below ___' },
+
+  // === BRK 020 (diagonal label, upper middle) ===
+  { l:39.3, t:18.1, w:3.0, h:7.2, a:'BRK 020', tip:'BRK radial boundary' },
+
+  // === High point A2 ===
+  { l:22.1, t:23.3, w:5.4, h:1.5, a:'6962', tip:'High Point MSL – Area A2' },
+
+  // === Route label O-1a ===
+  { l:13.7, t:28.1, w:4.0, h:1.5, a:'O-1a', tip:'Route/area label' },
+
+  // === Freq 121.5 near O-1 (west side) ===
+  { l:11.5, t:30.0, w:5.4, h:1.6, a:'121.5', tip:'Must Monitor Frequency – NW areas' },
+
+  // === I-2a ===
+  { l:44.7, t:30.0, w:5.3, h:1.6, a:'I-2a', tip:'Area boundary label' },
+
+  // === O-1 ===
+  { l:10.2, t:31.5, w:4.2, h:1.4, a:'O-1', tip:'Route/area label' },
+
+  // === BRK 035 ===
+  { l:55.3, t:25.0, w:3.0, h:6.5, a:'BRK 035', tip:'BRK radial boundary' },
+
+  // === BRK 055 ===
+  { l:62.1, t:32.0, w:4.2, h:1.4, a:'BRK 055', tip:'BRK radial boundary' },
+
+  // === High point A4 ===
+  { l:68.2, t:28.3, w:5.4, h:1.5, a:'6526', tip:'High Point MSL – Area A4' },
+
+  // === 22 DME ===
+  { l:75.3, t:27.8, w:3.0, h:5.5, a:'22 DME', tip:'DME distance' },
+
+  // === 18 DME ===
+  { l:69.5, t:30.5, w:2.8, h:5.3, a:'18 DME', tip:'DME distance' },
+
+  // === Freq 121.5 (outer ring east) ===
+  { l:65.8, t:35.1, w:5.4, h:1.4, a:'121.5', tip:'Must Monitor Frequency – east area' },
+
+  // === Freq 121.5 near A3 ===
+  { l:46.2, t:35.2, w:5.4, h:1.4, a:'121.5', tip:'Must Monitor Frequency – A3 area' },
+
+  // === Freq 121.5 west ===
+  { l:15.8, t:34.2, w:6.5, h:1.4, a:'121.5', tip:'Must Monitor Frequency – west areas' },
+
+  // === NICKL ===
+  { l:13.3, t:36.6, w:5.3, h:1.5, a:'NICKL', tip:'Named fix – NICKL' },
+
+  // === High Point A1 ===
+  { l:22.1, t:34.5, w:5.4, h:1.5, a:'7329', tip:'High Point MSL – Area A1' },
+
+  // === I-2 ===
+  { l:48.4, t:42.9, w:2.4, h:1.5, a:'I-2', tip:'Area label – I-2' },
+
+  // === High Point A3 ===
+  { l:61.1, t:42.8, w:5.4, h:1.5, a:'7241', tip:'High Point MSL – Area A3' },
+
+  // === 16 DME ===
+  { l:52.2, t:36.8, w:2.4, h:5.5, a:'16 DME', tip:'DME distance' },
+
+  // === 12 DME ===
+  { l:45.2, t:38.0, w:2.3, h:5.4, a:'12 DME', tip:'DME distance' },
+
+  // === BRK 065 ===
+  { l:68.0, t:38.0, w:3.5, h:1.3, a:'BRK 065', tip:'BRK radial boundary' },
+
+  // === O-3a ===
+  { l:63.0, t:44.0, w:4.3, h:1.5, a:'O-3a', tip:'Area label – O-3a' },
+
+  // === CLAMP ===
+  { l:35.8, t:39.6, w:7.2, h:1.4, a:'CLAMP', tip:'Named fix – CLAMP' },
+
+  // === NOSE ===
+  { l:21.1, t:41.2, w:7.2, h:1.4, a:'NOSE', tip:'Named fix – NOSE' },
+
+  // === NEEDL ===
+  { l:13.2, t:42.4, w:7.2, h:1.4, a:'NEEDL', tip:'Named fix – NEEDL' },
+
+  // === BRK VOR freq ===
+  { l:8.9, t:50.5, w:3.8, h:1.0, a:'112.5', tip:'BRK VOR frequency' },
+
+  // === KFLY ===
+  { l:12.4, t:53.0, w:7.2, h:1.4, a:'KFLY', tip:'Airport – KFLY' },
+
+  // === 9,000' corridor (vertical arrow) ===
+  { l:37.6, t:46.0, w:3.2, h:8.5, a:"9,000'", tip:'KAFF ARR corridor altitude' },
+
+  // === 9,500' corridor (vertical arrow southbound) ===
+  { l:37.6, t:55.8, w:3.2, h:6.5, a:"9,500'", tip:'KAFF DEP corridor altitude' },
+
+  // === BRK 080 ===
+  { l:70.5, t:51.5, w:4.2, h:1.4, a:'BRK 080', tip:'BRK radial boundary' },
+
+  // === High point A5 ===
+  { l:61.2, t:52.3, w:4.2, h:1.4, a:'7374', tip:'High Point MSL – Area A5' },
+
+  // === ANVIL ===
+  { l:20.5, t:52.9, w:7.2, h:1.4, a:'ANVIL', tip:'Named fix – ANVIL' },
+
+  // === Freq 120.6 (A5/A6 area east) ===
+  { l:72.8, t:53.2, w:5.4, h:1.4, a:'120.6', tip:'Must Monitor Frequency – east areas' },
+
+  // === Freq 120.6 A5 ===
+  { l:53.5, t:53.5, w:5.4, h:1.4, a:'120.6', tip:'Must Monitor Frequency – A5 area' },
+
+  // === BRK 095 ===
+  { l:76.3, t:55.4, w:3.1, h:1.6, a:'BRK 095', tip:'BRK radial boundary' },
+
+  // === High point A6 ===
+  { l:72.5, t:57.4, w:4.5, h:2.1, a:'7224', tip:'High Point MSL – Area A6' },
+
+  // === SAND ===
+  { l:20.8, t:55.5, w:7.2, h:1.4, a:'SAND', tip:'Named fix – SAND' },
+
+  // === I-4 ===
+  { l:50.2, t:57.0, w:5.4, h:1.5, a:'I-4', tip:'Area label – I-4' },
+
+  // === I-4a ===
+  { l:58.1, t:57.4, w:5.4, h:1.5, a:'I-4a', tip:'Area label – I-4a' },
+
+  // === High point A7 ===
+  { l:36.5, t:59.2, w:7.2, h:1.4, a:'6211', tip:'High Point MSL – Area A7' },
+
+  // === O-5 ===
+  { l:54.5, t:59.3, w:4.2, h:1.5, a:'O-5', tip:'Area label – O-5' },
+
+  // === 11 DME ===
+  { l:52.8, t:60.5, w:2.2, h:5.5, a:'11 DME', tip:'DME distance' },
+
+  // === 18 DME (south) ===
+  { l:59.3, t:60.0, w:2.2, h:5.5, a:'18 DME', tip:'DME distance' },
+
+  // === BRK 095 second ===
+  { l:76.8, t:62.5, w:3.8, h:2.2, a:'BRK 095', tip:'BRK radial boundary' },
+
+  // === Freq 120.6 A7 area ===
+  { l:65.3, t:62.5, w:5.4, h:1.4, a:'120.6', tip:'Must Monitor Frequency – A8 area' },
+
+  // === BRK 110 ===
+  { l:72.4, t:64.3, w:4.2, h:1.4, a:'BRK 110', tip:'BRK radial boundary' },
+
+  // === SHRVR ===
+  { l:34.5, t:67.6, w:7.2, h:1.4, a:'SHRVR', tip:'Named fix – SHRVR' },
+
+  // === Freq 120.6 A7 big ===
+  { l:56.9, t:71.0, w:5.5, h:3.1, a:'120.6', tip:'Must Monitor Frequency – south areas' },
+
+  // === O-5a ===
+  { l:51.8, t:71.2, w:5.3, h:1.5, a:'O-5a', tip:'Area label – O-5a' },
+
+  // === 20 DME ===
+  { l:65.2, t:68.5, w:2.2, h:5.8, a:'20 DME', tip:'DME distance' },
+
+  // === 24 DME ===
+  { l:69.9, t:68.0, w:2.3, h:6.0, a:'24 DME', tip:'DME distance' },
+
+  // === High point A9 ===
+  { l:39.0, t:73.5, w:5.4, h:1.5, a:'6000', tip:'High Point MSL – Area A9' },
+
+  // === BRK 120 ===
+  { l:70.0, t:74.9, w:5.5, h:3.1, a:'BRK 120', tip:'BRK radial boundary' },
+
+  // === I-6 ===
+  { l:27.1, t:76.8, w:7.2, h:1.4, a:'I-6', tip:'Area label – I-6' },
+
+  // === Freq 120.6 A9 ===
+  { l:37.4, t:79.5, w:5.4, h:1.5, a:'120.6', tip:'Must Monitor Frequency – A9 area' },
+
+  // === High point A10 ===
+  { l:60.2, t:76.5, w:5.4, h:1.5, a:'6112', tip:'High Point MSL – Area A10' },
+
+  // === I-6a ===
+  { l:34.4, t:80.5, w:5.4, h:1.5, a:'I-6a', tip:'Area label – I-6a' },
+
+  // === LOW altitude range ===
+  { l:33.8, t:85.0, w:13.7, h:1.4, a:"8,500' - 9,500'", tip:'LOW altitude range' },
+
+  // === HIGH altitude range ===
+  { l:33.8, t:86.7, w:13.7, h:1.4, a:"10,500' - 11,500'", tip:'HIGH altitude range' },
+
+  // === BRK 135 ===
+  { l:64.1, t:86.5, w:2.9, h:6.5, a:'BRK 135', tip:'BRK radial boundary' },
+
+  // === Freq 120.6 A10 ===
+  { l:50.6, t:88.0, w:5.4, h:1.5, a:'120.6', tip:'Must Monitor Frequency – A10 area' },
+
+  // === High point A10 bottom ===
+  { l:56.9, t:85.0, w:5.4, h:1.5, a:'6112', tip:'High Point MSL – Area A10' },
+];
+
+const TOTAL = FIELDS.length;
+let inputs = [];
+let correct = 0, wrong = 0;
+
+function norm(s) {
+  return s.trim().replace(/['']/g,"'").replace(/\s+/g,' ').toUpperCase();
+}
+
+function buildFields() {
+  const container = document.getElementById('chart-container');
+  // Remove old wraps
+  container.querySelectorAll('.field-wrap').forEach(e => e.remove());
+  inputs = [];
+
+  FIELDS.forEach((f, idx) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'field-wrap';
+    wrap.style.left = f.l + '%';
+    wrap.style.top = f.t + '%';
+    wrap.style.width = f.w + '%';
+    wrap.style.height = f.h + '%';
+
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.autocomplete = 'off';
+    inp.autocorrect = 'off';
+    inp.spellcheck = false;
+    inp.dataset.idx = idx;
+    inp.title = f.tip;
+
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { checkOne(idx); e.preventDefault(); }
+      if (e.key === 'Tab') { /* natural tab */ }
+    });
+    inp.addEventListener('blur', () => { if (inp.value) checkOne(idx); });
+
+    wrap.appendChild(inp);
+    container.appendChild(wrap);
+    inputs.push({ wrap, inp, checked: false, wasCorrect: false });
+  });
+  updateScore();
+}
+
+function checkOne(idx) {
+  const { wrap, inp, checked, wasCorrect } = inputs[idx];
+  if (wasCorrect) return;
+  const userVal = norm(inp.value);
+  const correctVal = norm(FIELDS[idx].a);
+
+  const wasWrong = wrap.classList.contains('wrong');
+
+  if (userVal === correctVal) {
+    if (!inputs[idx].wasCorrect) {
+      correct++;
+      if (wasWrong) wrong--;
+      inputs[idx].wasCorrect = true;
+    }
+    wrap.classList.remove('wrong', 'revealed');
+    wrap.classList.add('correct');
+    inp.disabled = true;
+  } else {
+    if (!wasWrong && !inputs[idx].wasCorrect) wrong++;
+    wrap.classList.add('wrong');
+    showHint('✗ ' + FIELDS[idx].tip + ' — try again');
+  }
+  updateScore();
+}
+
+function checkAll() {
+  inputs.forEach((_, idx) => {
+    if (!inputs[idx].wasCorrect && inputs[idx].inp.value) checkOne(idx);
+  });
+}
+
+function revealAll() {
+  inputs.forEach((item, idx) => {
+    if (!item.wasCorrect) {
+      item.inp.value = FIELDS[idx].a;
+      item.inp.disabled = true;
+      item.wrap.classList.remove('wrong', 'correct');
+      item.wrap.classList.add('revealed');
+    }
+  });
+}
+
+function resetAll() {
+  correct = 0; wrong = 0;
+  inputs.forEach(item => {
+    item.inp.value = '';
+    item.inp.disabled = false;
+    item.wrap.classList.remove('correct', 'wrong', 'revealed');
+    item.wasCorrect = false;
+  });
+  updateScore();
+}
+
+function updateScore() {
+  document.getElementById('sc').textContent = correct;
+  document.getElementById('sw').textContent = wrong;
+  const left = TOTAL - inputs.filter(i => i.wasCorrect).length;
+  document.getElementById('sl').textContent = left;
+}
+
+let hintTimer;
+function showHint(msg) {
+  const box = document.getElementById('hint-box');
+  box.textContent = msg;
+  box.classList.add('show');
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => box.classList.remove('show'), 2500);
+}
+
+// Build fields once image loaded (so % positioning is accurate)
+const img = document.getElementById('chart-img');
+if (img.complete) buildFields();
+else img.addEventListener('load', buildFields);
+</script>
+</body>
+</html>
